@@ -1,0 +1,394 @@
+// Prisma Schema for Travel Agent Website
+// Database: PostgreSQL with optimized indexes and relations
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== AUTHENTICATION & USERS ====================
+
+enum UserRole {
+  USER
+  ADMIN
+  AGENT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // For email/password auth
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  bookings      Booking[]
+  reviews       Review[]
+  savedTrips    SavedTrip[]
+  notifications Notification[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ==================== DESTINATIONS ====================
+
+enum DestinationType {
+  BEACH
+  MOUNTAIN
+  CITY
+  ADVENTURE
+  CULTURAL
+  WILDLIFE
+  CRUISE
+  RESORT
+}
+
+model Destination {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  name        String
+  country     String
+  city        String
+  description String            @db.Text
+  shortDesc   String            @db.VarChar(200)
+  type        DestinationType[]
+  
+  // Pricing
+  priceFrom   Decimal           @db.Decimal(10, 2)
+  priceTo     Decimal?          @db.Decimal(10, 2)
+  currency    String            @default("USD")
+  
+  // Media
+  coverImage  String
+  images      String[]
+  videoUrl    String?
+  
+  // Location
+  latitude    Float
+  longitude   Float
+  
+  // Features
+  highlights  String[]
+  included    String[]
+  excluded    String[]
+  duration    Int // Duration in days
+  
+  // Metadata
+  rating      Float             @default(0)
+  reviewCount Int               @default(0)
+  bookingCount Int              @default(0)
+  isFeatured  Boolean           @default(false)
+  isActive    Boolean           @default(true)
+  
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  packages    Package[]
+  reviews     Review[]
+  bookings    Booking[]
+  savedTrips  SavedTrip[]
+
+  @@index([slug])
+  @@index([country, city])
+  @@index([isFeatured, isActive])
+  @@index([type])
+  @@map("destinations")
+}
+
+// ==================== PACKAGES ====================
+
+model Package {
+  id              String      @id @default(cuid())
+  destinationId   String
+  destination     Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  
+  name            String
+  description     String      @db.Text
+  price           Decimal     @db.Decimal(10, 2)
+  
+  // Package details
+  duration        Int // in days
+  maxGroupSize    Int
+  minAge          Int         @default(0)
+  
+  // Inclusions
+  accommodation   Boolean     @default(false)
+  meals           String[]    // ["breakfast", "lunch", "dinner"]
+  transport       Boolean     @default(false)
+  guide           Boolean     @default(false)
+  insurance       Boolean     @default(false)
+  
+  // Availability
+  availableFrom   DateTime
+  availableTo     DateTime
+  isActive        Boolean     @default(true)
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  bookings        Booking[]
+
+  @@index([destinationId])
+  @@index([isActive])
+  @@map("packages")
+}
+
+// ==================== BOOKINGS ====================
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  bookingNumber   String        @unique
+  
+  // User & Package
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+  destinationId   String
+  destination     Destination   @relation(fields: [destinationId], references: [id])
+  packageId       String?
+  package         Package?      @relation(fields: [packageId], references: [id])
+  
+  // Trip details
+  startDate       DateTime
+  endDate         DateTime
+  travelers       Int           @default(1)
+  
+  // Pricing
+  subtotal        Decimal       @db.Decimal(10, 2)
+  taxes           Decimal       @db.Decimal(10, 2)
+  discount        Decimal       @default(0) @db.Decimal(10, 2)
+  total           Decimal       @db.Decimal(10, 2)
+  currency        String        @default("USD")
+  
+  // Status
+  bookingStatus   BookingStatus @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  
+  // Payment
+  stripePaymentIntentId String?
+  paidAt          DateTime?
+  
+  // Extras
+  specialRequests String?       @db.Text
+  
+  // Contact info
+  contactName     String
+  contactEmail    String
+  contactPhone    String
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  payments        Payment[]
+  notifications   Notification[]
+
+  @@index([userId])
+  @@index([destinationId])
+  @@index([bookingStatus])
+  @@index([bookingNumber])
+  @@index([startDate])
+  @@map("bookings")
+}
+
+// ==================== PAYMENTS ====================
+
+model Payment {
+  id                String        @id @default(cuid())
+  bookingId         String
+  booking           Booking       @relation(fields: [bookingId], references: [id])
+  
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("USD")
+  
+  stripePaymentId   String        @unique
+  stripeCustomerId  String?
+  
+  status            PaymentStatus
+  paymentMethod     String?       // card, wallet, etc
+  
+  metadata          Json?
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([bookingId])
+  @@index([stripePaymentId])
+  @@map("payments")
+}
+
+// ==================== REVIEWS ====================
+
+model Review {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  destinationId   String
+  destination     Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  
+  rating          Int // 1-5
+  title           String
+  comment         String      @db.Text
+  
+  images          String[]
+  
+  isVerified      Boolean     @default(false)
+  isPublished     Boolean     @default(true)
+  
+  helpfulCount    Int         @default(0)
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([userId, destinationId])
+  @@index([destinationId])
+  @@index([rating])
+  @@map("reviews")
+}
+
+// ==================== SAVED TRIPS ====================
+
+model SavedTrip {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destinationId String
+  destination   Destination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  
+  notes         String?     @db.Text
+  
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, destinationId])
+  @@index([userId])
+  @@map("saved_trips")
+}
+
+// ==================== NOTIFICATIONS ====================
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  TRIP_REMINDER
+  REVIEW_REQUEST
+  PROMOTION
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  
+  bookingId String?
+  booking   Booking?         @relation(fields: [bookingId], references: [id])
+  
+  isRead    Boolean          @default(false)
+  
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ==================== ANALYTICS ====================
+
+model Analytics {
+  id              String   @id @default(cuid())
+  destinationId   String?
+  
+  // Metrics
+  views           Int      @default(0)
+  searches        Int      @default(0)
+  bookings        Int      @default(0)
+  revenue         Decimal  @default(0) @db.Decimal(12, 2)
+  
+  // Dimension
+  date            DateTime @db.Date
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([destinationId, date])
+  @@index([date])
+  @@map("analytics")
+}

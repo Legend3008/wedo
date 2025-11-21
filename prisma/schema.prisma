@@ -3,11 +3,15 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearchPostgres"]
+  previewFeatures = ["fullTextSearch"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  relationMode = "prisma"
 }
 
 // ==================== AUTHENTICATION & USERS ====================
@@ -388,7 +392,8 @@ model Analytics {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@unique([destinationId, date])
+  @@unique([destinationId, date], name: "destinationId_date")
   @@index([date])
+  @@index([destinationId])
   @@map("analytics")
 }

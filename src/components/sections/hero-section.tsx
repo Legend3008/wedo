@@ -1,48 +1,60 @@
 /**
  * Hero Section with 3D and Animations
+ * Optimized with React.memo and proper cleanup
  */
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Search, ArrowRight } from 'lucide-react';
 import gsap from 'gsap';
 
-export function HeroSection() {
+function HeroSectionComponent() {
   const heroRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
+  const animationRef = useRef<gsap.Context | null>(null);
 
   useEffect(() => {
-    // GSAP Animations
-    const ctx = gsap.context(() => {
-      gsap.from(titleRef.current, {
+    if (!titleRef.current || !subtitleRef.current) return;
+
+    // GSAP Animations with proper context
+    animationRef.current = gsap.context(() => {
+      const tl = gsap.timeline({
+        defaults: { ease: 'power3.out' },
+      });
+
+      tl.from(titleRef.current, {
         y: 50,
         opacity: 0,
         duration: 1,
-        ease: 'power3.out',
-      });
-
-      gsap.from(subtitleRef.current, {
-        y: 30,
-        opacity: 0,
-        duration: 1,
-        delay: 0.3,
-        ease: 'power3.out',
-      });
-
-      gsap.from('.hero-button', {
-        y: 20,
-        opacity: 0,
-        duration: 0.8,
-        delay: 0.6,
-        stagger: 0.2,
-        ease: 'power3.out',
-      });
+      })
+        .from(
+          subtitleRef.current,
+          {
+            y: 30,
+            opacity: 0,
+            duration: 1,
+          },
+          '-=0.7'
+        )
+        .from(
+          '.hero-button',
+          {
+            y: 20,
+            opacity: 0,
+            duration: 0.8,
+            stagger: 0.2,
+          },
+          '-=0.5'
+        );
     }, heroRef);
 
-    return () => ctx.revert();
+    return () => {
+      animationRef.current?.revert();
+    };
   }, []);
 
   return (
@@ -51,10 +63,10 @@ export function HeroSection() {
       className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50"
     >
       {/* Animated Background Shapes */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob" />
-        <div className="absolute top-40 right-10 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000" />
-        <div className="absolute bottom-20 left-1/2 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000" />
+      <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob will-change-transform" />
+        <div className="absolute top-40 right-10 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000 will-change-transform" />
+        <div className="absolute bottom-20 left-1/2 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000 will-change-transform" />
       </div>
 
       {/* Content */}
@@ -78,18 +90,22 @@ export function HeroSection() {
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Button size="lg" className="hero-button text-lg px-8 py-6">
-            <Search className="mr-2 h-5 w-5" />
-            Explore Destinations
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className="hero-button text-lg px-8 py-6"
-          >
-            View Packages
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Button>
+          <Link href="/destinations">
+            <Button size="lg" className="hero-button text-lg px-8 py-6">
+              <Search className="mr-2 h-5 w-5" />
+              Explore Destinations
+            </Button>
+          </Link>
+          <Link href="/packages">
+            <Button
+              size="lg"
+              variant="outline"
+              className="hero-button text-lg px-8 py-6"
+            >
+              View Packages
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+          </Link>
         </div>
 
         {/* Stats */}
@@ -109,7 +125,7 @@ export function HeroSection() {
       </div>
 
       {/* Scroll Indicator */}
-      <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce">
+      <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce" aria-label="Scroll down">
         <div className="w-6 h-10 rounded-full border-2 border-gray-400 flex justify-center p-2">
           <div className="w-1 h-3 bg-gray-400 rounded-full animate-pulse" />
         </div>
@@ -117,3 +133,5 @@ export function HeroSection() {
     </div>
   );
 }
+
+export const HeroSection = memo(HeroSectionComponent);
